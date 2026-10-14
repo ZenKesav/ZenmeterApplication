@@ -1,0 +1,9 @@
+export const ROLES = {
+  ADMIN: 'ADMIN',
+  OPERATOR: 'OPERATOR',
+  QC: 'QC',
+  SHIFT_SUPERVISOR: 'SHIFT_SUPERVISOR',
+  REPORT_VIEWER: 'REPORT_VIEWER'
+};
+
+export default ROLES;

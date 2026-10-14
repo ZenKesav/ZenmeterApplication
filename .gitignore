@@ -1,0 +1,15 @@
+
+# MacOS system files
+.DS_Store
+
+# Node.js dependencies
+Backend/node_modules/
+Backend/Log/*.log
+Backend/logs/*.log
+*.log
+
+
+# MacOS system files
+.DS_Store
+Frontend/node_modules/
+*.log
