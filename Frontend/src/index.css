@@ -400,7 +400,7 @@ h1, h2, h3, h4, h5, h6,
   max-height: none;
   overflow-x: auto;
   position: relative;
-  border-radius: 8px 8px 0 0;
+  border-top: 1px solid #e2e8f0;
 }
 
 .table {
@@ -410,6 +410,7 @@ h1, h2, h3, h4, h5, h6,
   width: 100%;
 }
 
+.table thead th,
 .table th {
   background-color: #f8fafc !important;
   color: #475569 !important;
@@ -418,7 +419,8 @@ h1, h2, h3, h4, h5, h6,
   text-transform: uppercase;
   letter-spacing: 0.05em;
   padding: 0.75rem 1rem;
-  border-bottom: 2px solid #e2e8f0;
+  border-top: 1px solid #e2e8f0 !important;
+  border-bottom: 2px solid #e2e8f0 !important;
 }
 
 .table td {
@@ -429,6 +431,16 @@ h1, h2, h3, h4, h5, h6,
 
 .table-hover tbody tr:hover {
   background-color: #fff9f6 !important;
+}
+
+/* TABLE CONTAINER BOX BORDER */
+.card:has(.table-responsive),
+.card:has(.table),
+.table-card {
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 12px !important;
+  overflow: hidden;
+  box-shadow: 0 1px 3px 0 rgba(15, 23, 42, 0.05);
 }
 
 /* BADGES & PILLS */

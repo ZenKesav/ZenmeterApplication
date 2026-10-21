@@ -83,8 +83,7 @@ export default function StageAssignment() {
       <div className="row mb-4">
         <div className="col-12 d-flex justify-content-between align-items-center">
           <div>
-            <h1 className="fs-3 mb-1 fw-bold text-dark">Stage & Station Assignments</h1>
-            <p className="text-secondary mb-0">Assign R&D Stages and Hardware Jigs to Operators</p>
+            <h1 className="fs-3 mb-0 fw-bold text-dark">Stage & Station Assignments</h1>
           </div>
           <button className="btn btn-primary btn-sm fw-medium shadow-sm" onClick={() => setIsModalOpen(true)}>
             <i className="ti ti-plus me-1"></i> Create New Assignment
@@ -101,7 +100,7 @@ export default function StageAssignment() {
       {loading ? (
         <LoadingSpinner text="Fetching Current Assignments..." />
       ) : (
-        <div className="card shadow-sm">
+        <div className="card shadow-sm border">
           <div className="table-responsive">
             <table className="table mb-0 align-middle table-hover">
               <thead className="table-light">

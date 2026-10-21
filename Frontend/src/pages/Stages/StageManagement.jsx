@@ -203,11 +203,10 @@ export default function StageManagement() {
       <div className="row mb-4">
         <div className="col-12 d-flex justify-content-between align-items-center">
           <div>
-            <h1 className="fs-3 mb-1 fw-bold text-dark d-flex align-items-center gap-2">
+            <h1 className="fs-3 mb-0 fw-bold text-dark d-flex align-items-center gap-2">
               <i className="ti ti-subtask text-primary"></i>
               <span>Stage Management</span>
             </h1>
-            {/* <p className="text-secondary mb-0">Configure Factory Production Flow Stages</p> */}
           </div>
           <button className="btn btn-primary btn-sm fw-semibold shadow-sm" onClick={() => setIsCreateOpen(true)}>
             <i className="ti ti-plus me-1"></i> Create New Stage
@@ -267,7 +266,7 @@ export default function StageManagement() {
       {loading ? (
         <SkeletonTable rows={5} columns={8} />
       ) : (
-        <div className="card shadow-sm border-0">
+        <div className="card shadow-sm border">
           <div className="table-responsive">
             <table className="table mb-0 align-middle table-hover">
               <thead className="table-light">

@@ -11,6 +11,7 @@ export default function RoleManagement() {
   const [roles, setRoles] = useState([]);
   const [availablePermissions, setAvailablePermissions] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);
 
   // Roles Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -34,30 +35,41 @@ export default function RoleManagement() {
   // Roles Search & Filter state
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const latestRolesReqRef = useRef(0);
 
   const loadRoles = (searchVal = searchTerm, statusVal = statusFilter) => {
+    const reqId = ++latestRolesReqRef.current;
     setLoading(true);
     const params = {};
     if (searchVal && searchVal.trim()) params.search = searchVal.trim();
     if (statusVal && statusVal.trim()) params.status = statusVal.trim();
 
     roleService.getRoles(params).then(res => {
-      const fetchedRoles = Array.isArray(res) ? res : (res?.roles || res?.data || []);
-      const fetchedPerms = res?.availablePermissions || [];
-      setRoles(Array.isArray(fetchedRoles) ? fetchedRoles : []);
-      setAvailablePermissions(Array.isArray(fetchedPerms) ? fetchedPerms : []);
-      setLoading(false);
+      if (reqId === latestRolesReqRef.current) {
+        const fetchedRoles = Array.isArray(res) ? res : (res?.roles || res?.data || []);
+        const fetchedPerms = res?.availablePermissions || [];
+        setRoles(Array.isArray(fetchedRoles) ? fetchedRoles : []);
+        setAvailablePermissions(Array.isArray(fetchedPerms) ? fetchedPerms : []);
+        setLoading(false);
+        setInitialLoading(false);
+      }
     }).catch(err => {
-      console.error('loadRoles Error:', err);
-      setRoles([]);
-      setAvailablePermissions([]);
-      setLoading(false);
+      if (reqId === latestRolesReqRef.current) {
+        console.error('loadRoles Error:', err);
+        setRoles([]);
+        setAvailablePermissions([]);
+        setLoading(false);
+        setInitialLoading(false);
+      }
     });
   };
 
   useEffect(() => {
-    loadRoles();
-  }, []);
+    const timer = setTimeout(() => {
+      loadRoles(searchTerm, statusFilter);
+    }, 150);
+    return () => clearTimeout(timer);
+  }, [searchTerm, statusFilter]);
 
   // Format Date Helper (12-Hour AM/PM)
   const formatDate = (dateStr) => {
@@ -221,11 +233,10 @@ export default function RoleManagement() {
       <div className="row mb-4">
         <div className="col-12 d-flex justify-content-between align-items-center">
           <div>
-            <h1 className="fs-3 mb-1 fw-bold text-dark d-flex align-items-center gap-2">
+            <h1 className="fs-3 mb-0 fw-bold text-dark d-flex align-items-center gap-2">
               <i className="ti ti-user-shield text-primary"></i>
               <span>Role Management</span>
             </h1>
-            {/* <p className="text-secondary mb-0">Manage Authorization Roles, Descriptions, Status & Audit Logs</p> */}
           </div>
           <button className="btn btn-primary btn-sm fw-semibold shadow-sm" onClick={() => setIsCreateOpen(true)}>
             <i className="ti ti-plus me-1"></i> Create New Role
@@ -234,65 +245,67 @@ export default function RoleManagement() {
       </div>
 
       {/* Roles Data Table */}
-      {loading ? (
-        <SkeletonTable rows={5} columns={7} />
-      ) : (
-        <div className="card shadow-sm border-0">
-          <div className="p-3 bg-light-subtle rounded-top border-bottom">
-            <div className="row g-2 align-items-center">
-              <div className="col-md-5 col-lg-4">
-                <div className="input-group input-group-sm">
-                  <span className="input-group-text bg-white border-end-0 text-muted">
+      <div className="card shadow-sm border">
+        <div className="p-3 bg-light-subtle rounded-top border-bottom">
+          <div className="row g-2 align-items-center">
+            <div className="col-md-5 col-lg-4">
+              <div className="input-group input-group-sm">
+                <span className="input-group-text bg-white border-end-0 text-muted">
+                  {loading && !initialLoading ? (
+                    <span className="spinner-border spinner-border-sm text-primary" style={{ width: '0.85rem', height: '0.85rem' }} role="status"></span>
+                  ) : (
                     <i className="ti ti-search"></i>
-                  </span>
-                  <input
-                    type="text"
-                    className="form-control form-control-sm border-start-0"
-                    placeholder="Search Role Name or Description..."
-                    value={searchTerm}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setSearchTerm(val);
-                      setCurrentPage(1);
-                      loadRoles(val);
-                    }}
-                  />
-                  {searchTerm && (
-                    <button
-                      className="btn btn-sm btn-outline-secondary border-start-0"
-                      type="button"
-                      onClick={() => {
-                        setSearchTerm('');
-                        setCurrentPage(1);
-                        loadRoles('', statusFilter);
-                      }}
-                    >
-                      <i className="ti ti-x"></i>
-                    </button>
                   )}
-                </div>
-              </div>
-              <div className="col-md-3 col-lg-2">
-                <select
-                  className="form-select form-select-sm"
-                  value={statusFilter}
+                </span>
+                <input
+                  type="text"
+                  className="form-control form-control-sm border-start-0"
+                  placeholder="Search Role Name or Description..."
+                  value={searchTerm}
                   onChange={(e) => {
-                    const val = e.target.value;
-                    setStatusFilter(val);
+                    setSearchTerm(e.target.value);
                     setCurrentPage(1);
-                    loadRoles(searchTerm, val);
                   }}
-                >
-                  <option value="">All Status</option>
-                  <option value="ACTIVE">ACTIVE</option>
-                  <option value="INACTIVE">INACTIVE</option>
-                </select>
+                />
+                {searchTerm && (
+                  <button
+                    className="btn btn-sm btn-outline-secondary border-start-0"
+                    type="button"
+                    onClick={() => {
+                      setSearchTerm('');
+                      setCurrentPage(1);
+                    }}
+                  >
+                    <i className="ti ti-x"></i>
+                  </button>
+                )}
               </div>
             </div>
+            <div className="col-md-3 col-lg-2">
+              <select
+                className="form-select form-select-sm"
+                value={statusFilter}
+                onChange={(e) => {
+                  setStatusFilter(e.target.value);
+                  setCurrentPage(1);
+                }}
+              >
+                <option value="">All Status</option>
+                <option value="ACTIVE">ACTIVE</option>
+                <option value="INACTIVE">INACTIVE</option>
+              </select>
+            </div>
           </div>
+        </div>
 
-          <div className="table-responsive">
-            <table className="table mb-0 align-middle table-hover">
+        {initialLoading ? (
+          <div className="p-3">
+            <SkeletonTable rows={5} columns={7} />
+          </div>
+        ) : (
+          <>
+            <div className="table-responsive">
+              <table className="table mb-0 align-middle table-hover">
               <thead className="table-light">
                 <tr>
                   <th style={{ width: '80px' }} className="text-center">S.No</th>
@@ -385,8 +398,9 @@ export default function RoleManagement() {
               setCurrentPage(1);
             }}
           />
-        </div>
-      )}
+          </>
+        )}
+      </div>
 
       {/* Create Role Modal */}
       <Modal isOpen={isCreateOpen} onClose={() => setIsCreateOpen(false)} title="Create System Authorization Role">

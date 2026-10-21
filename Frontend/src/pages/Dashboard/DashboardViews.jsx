@@ -37,8 +37,7 @@ export function AdminDashboardView() {
         <div className="col-12">
           <div className="d-flex justify-content-between align-items-center mb-4">
             <div>
-              <h1 className="fs-3 mb-1 fw-bold">Dashboard</h1>
-              <p className="text-secondary mb-0">Zenmeter Unified Test Execution & Production Portal</p>
+              <h1 className="fs-3 mb-0 fw-bold">Dashboard</h1>
             </div>
             <Link to="/settings" className="btn btn-outline-primary btn-sm">
               <i className="ti ti-settings me-1"></i> System Settings
@@ -175,7 +174,7 @@ export function AdminDashboardView() {
       {/* Row 4: Recent Execution Stream */}
       <div className="row mb-3">
         <div className="col-12">
-          <div className="card shadow-sm">
+          <div className="card shadow-sm border">
             <div className="card-header bg-white d-flex justify-content-between align-items-center px-4 py-3">
               <h4 className="mb-0 h5 fw-bold">Live Production Stage Execution Stream</h4>
               <Link to="/production" className="small text-primary text-decoration-underline fw-medium">View All Meters</Link>
@@ -258,8 +257,7 @@ export function SupervisorDashboardView() {
       <div className="row mb-4">
         <div className="col-12 d-flex justify-content-between align-items-center">
           <div>
-            <h1 className="fs-3 mb-1 fw-bold">Supervisor Dashboard</h1>
-            <p className="text-secondary mb-0">Line Allocation & Operator Stage Monitoring</p>
+            <h1 className="fs-3 mb-0 fw-bold">Supervisor Dashboard</h1>
           </div>
           <Link to="/assignments" className="btn btn-primary btn-sm">
             <i className="ti ti-sliders me-1"></i> Assign Stage to Operator
@@ -525,7 +523,7 @@ export function OperatorDashboardView() {
       {/* 5. Production Stage Work & Quality Performance Breakdown Table */}
       <div className="row mb-4">
         <div className="col-12">
-          <div className="card shadow-sm border-0">
+          <div className="card shadow-sm border">
             <div className="card-header bg-white px-4 py-3 d-flex justify-content-between align-items-center border-bottom">
               <div>
                 <h4 className="mb-0 h5 fw-bold text-dark">Production Stage Work & Quality Analysis</h4>
@@ -597,7 +595,7 @@ export function OperatorDashboardView() {
       {/* 6. Shift-Wise Operator Performance Analysis Table */}
       <div className="row mb-4">
         <div className="col-12">
-          <div className="card shadow-sm border-0">
+          <div className="card shadow-sm border">
             <div className="card-header bg-white px-4 py-3 d-flex justify-content-between align-items-center border-bottom">
               <div>
                 <h4 className="mb-0 h5 fw-bold text-dark">Shift-Wise Operator Work Performance Analysis</h4>
@@ -704,7 +702,7 @@ export function OperatorDashboardView() {
       {/* 8. Live Test Execution History Log Stream */}
       <div className="row">
         <div className="col-12">
-          <div className="card shadow-sm border-0">
+          <div className="card shadow-sm border">
             <div className="card-header bg-white px-4 py-3 d-flex justify-content-between align-items-center border-bottom">
               <h4 className="mb-0 h5 fw-bold text-dark">Recent Stage Test Execution History Log</h4>
               <Link to="/production" className="small text-primary text-decoration-underline fw-medium">View All Production Logs</Link>
@@ -770,8 +768,7 @@ export function QCDashboardView() {
       <div className="row mb-4">
         <div className="col-12 d-flex justify-content-between align-items-center">
           <div>
-            <h1 className="fs-3 mb-1 fw-bold">Quality Control Portal</h1>
-            <p className="text-secondary mb-0">Final Validation & Quality Inspection Queue</p>
+            <h1 className="fs-3 mb-0 fw-bold">Quality Control Portal</h1>
           </div>
           <Link to="/qc" className="btn btn-success btn-sm">
             <i className="ti ti-shield-check me-1"></i> Inspect Pending Queue ({queue.length})
@@ -847,8 +844,7 @@ export function ReportDashboardView() {
       <div className="row mb-4">
         <div className="col-12 d-flex justify-content-between align-items-center">
           <div>
-            <h1 className="fs-3 mb-1 fw-bold">Analytics & Yield Reports</h1>
-            <p className="text-secondary mb-0">Production Executive Summary</p>
+            <h1 className="fs-3 mb-0 fw-bold">Analytics & Yield Reports</h1>
           </div>
           <Link to="/reports" className="btn btn-outline-secondary btn-sm">
             View Full Reports

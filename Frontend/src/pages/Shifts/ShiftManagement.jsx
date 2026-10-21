@@ -457,11 +457,10 @@ export default function ShiftManagement() {
       <div className="row mb-4">
         <div className="col-12 d-flex justify-content-between align-items-center">
           <div>
-            <h1 className="fs-3 mb-1 fw-bold text-dark d-flex align-items-center gap-2">
+            <h1 className="fs-3 mb-0 fw-bold text-dark d-flex align-items-center gap-2">
               <i className="ti ti-clock-play text-primary"></i>
               <span>Shift Management</span>
             </h1>
-            {/* <p className="text-secondary mb-0">Configure Factory Work Shifts (6hr / 8hr / 9hr / 12hr), Day & Night Schedules & Audit Logs</p> */}
           </div>
           <button className="btn btn-primary btn-sm fw-semibold shadow-sm" onClick={() => setIsCreateOpen(true)}>
             <i className="ti ti-plus me-1"></i> Create New Shift
@@ -530,7 +529,7 @@ export default function ShiftManagement() {
       {loading ? (
         <SkeletonTable rows={5} columns={8} />
       ) : (
-        <div className="card shadow-sm border-0">
+        <div className="card shadow-sm border">
           <div className="table-responsive">
             <table className="table mb-0 align-middle table-hover">
               <thead className="table-light">

@@ -31,8 +31,7 @@ const Reports = () => {
         <div className="col-12">
           <div className="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-2">
             <div>
-              <h1 className="fs-3 mb-1 fw-bold">Reports</h1>
-              <p className="mb-0 text-secondary">View inventory & production analytics reports</p>
+              <h1 className="fs-3 mb-0 fw-bold">Reports</h1>
             </div>
             <div className="btn-group" role="group">
               {['daily', 'weekly', 'monthly', 'yearly'].map((tab) => (

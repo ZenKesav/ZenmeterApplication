@@ -104,6 +104,7 @@ export const jigService = {
     return request(`/jig/records${query ? `?${query}` : ''}`);
   },
   checkDuplicateImeis: (data = {}) => request('/jig/check-duplicates', { method: 'POST', body: JSON.stringify(data) }),
+  sendPrintPayload: (data = {}) => request('/jig/print', { method: 'POST', body: JSON.stringify(data) }),
   resetJigTest: (data = {}) => request('/jig/reset', { method: 'POST', body: JSON.stringify(data) })
 };
 

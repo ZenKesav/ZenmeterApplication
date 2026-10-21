@@ -47,6 +47,7 @@ export const authService = {
     if (params.scope) query.append('scope', params.scope);
     if (params.user_id) query.append('user_id', params.user_id);
     if (params.date) query.append('date', params.date);
+    if (params.search) query.append('search', params.search);
     const qs = query.toString();
     return await request(`/attendance/history${qs ? `?${qs}` : ''}`);
   }

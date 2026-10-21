@@ -33,6 +33,14 @@ export default function MeterTraceability() {
     fetchTraceability(initialMeter);
   }, [initialMeter]);
 
+  useEffect(() => {
+    if (!query || !query.trim()) return;
+    const timer = setTimeout(() => {
+      fetchTraceability(query.trim());
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [query]);
+
   const handleSearch = (e) => {
     e.preventDefault();
     setSearchParams({ meter: query });
@@ -43,8 +51,7 @@ export default function MeterTraceability() {
     <>
       <div className="row mb-4">
         <div className="col-12">
-          <h1 className="fs-3 mb-1 fw-bold text-dark">Meter Traceability Audit</h1>
-          <p className="text-secondary mb-0">End-to-End Hardware Test History & Lifecycle Logs</p>
+          <h1 className="fs-3 mb-0 fw-bold text-dark">Meter Traceability Audit</h1>
         </div>
       </div>
 

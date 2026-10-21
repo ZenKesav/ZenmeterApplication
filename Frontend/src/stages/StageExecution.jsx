@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useSearchParams, useParams } from 'react-router-dom';
+import { useSearchParams, useParams, useLocation } from 'react-router-dom';
 import { useAuth } from '../app/store';
 import { saveStageForUser } from '../utils/stageUtils';
 import { jigService, stageManagementService } from '../services/apiServices';
@@ -93,11 +93,20 @@ function QRCodeSVG({ value, size = 110 }) {
   );
 }
 
-export default function StageExecution() {
+export default function StageExecution({ isDemo: propIsDemo }) {
   const { user, setSelectedStageId } = useAuth();
   const { stageId: paramStageId } = useParams();
   const [searchParams] = useSearchParams();
+  const location = useLocation();
   const queryStage = searchParams.get('stage');
+
+  const isDemoMode = Boolean(
+    propIsDemo ||
+    location.pathname.includes('/demo') ||
+    location.pathname.includes('demo-test') ||
+    searchParams.get('mode') === 'demo' ||
+    searchParams.get('demo') === 'true'
+  );
 
   let activeStageId = 4;
   if (paramStageId && !isNaN(Number(paramStageId))) {
@@ -317,6 +326,136 @@ export default function StageExecution() {
     setJigLogs(prev => [...prev, logText]);
   };
 
+  // Generator for 8-channel realistic simulated demo telemetry
+  const generateDemoTelemetry = (customCycleId) => {
+    const cId = customCycleId || Math.floor(100 + Math.random() * 900);
+    const now = new Date();
+    const uuid = `DEMO-CYC-${cId}`;
+    const timestampStr = `${pad(now.getDate())}-${pad(now.getMonth() + 1)}-${now.getFullYear()} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}.${pad(now.getMilliseconds(), 3)}`;
+
+    // Generate 8 realistic channels with valid NIC data matching domain IMEI sequence (863906069415294 - 863906069415301)
+    const baseImei = 863906069415293;
+    const sigLevels = ['-65dBm', '-62dBm', '-68dBm', '-63dBm', '-60dBm', '-66dBm', '-64dBm', '-67dBm'];
+    const channels = Array.from({ length: 8 }, (_, idx) => {
+      const chNo = idx + 1;
+      const imei = String(baseImei + chNo);
+      return {
+        ch: chNo,
+        st: 'PASS',
+        imei: imei,
+        hwv: 'v1.2',
+        fwv: 'v2.0',
+        sig: sigLevels[idx] || '-65dBm',
+        nic_uuid: `NIC-ZM-${imei}`,
+        comms_technology: '12',
+        isSavedToDb: true
+      };
+    });
+
+    const logs = [
+      `[${timestampStr}] [DEMO INIT] - Stage 4 Jig Test Console Demo Simulation Engine Initialized.`,
+      `[${timestampStr}] [DEMO PORT] - Virtual USB Emulation connected on DEMO-PORT-01 (9600 8N1).`,
+      `[${timestampStr}] [TX] - START`,
+      `[${timestampStr}] [RX] - ACK (JIG READY)`,
+      `[${timestampStr}] [TX] - GET_DATA`,
+      `[${timestampStr}] [RX] - 8-Channel Telemetry Packets Received.`,
+      `[${timestampStr}] [DB] - 8 Valid Channel Records Synced with DB. Cycle: ${uuid} (#${cId}).`
+    ];
+
+    return {
+      cycleId: cId,
+      cycleUuid: uuid,
+      timestamp: timestampStr,
+      data: { ch: channels },
+      logs: logs
+    };
+  };
+
+  // In Demo Mode on mount: configure virtual USB port, but keep channel data empty until "Start Demo Test" is clicked!
+  useEffect(() => {
+    if (isDemoMode) {
+      setUsbConnected(true);
+      setUsbDeviceName('DEMO-USB-PORT');
+      setSelectedPort('DEMO-PORT-01');
+      setDetailedPorts([
+        { path: 'DEMO-PORT-01', friendlyName: 'DEMO-PORT-01 (Virtual Jig USB)', shortName: 'DEMO-PORT-01' },
+        { path: 'DEMO-PORT-02', friendlyName: 'DEMO-PORT-02 (Loopback Simulator)', shortName: 'DEMO-PORT-02' }
+      ]);
+      setAvailablePorts(['DEMO-PORT-01', 'DEMO-PORT-02']);
+      setJigData(null);
+      setJigLogs([]);
+      setCycleId(null);
+      setCycleUuid(null);
+      setSaveTimestamp(null);
+      setIsSavedToDb(false);
+      setSavedCount(0);
+      setTestState('IDLE');
+    }
+  }, [isDemoMode]);
+
+  // Laser / Thermal Printer JSON Payload Modal State & API Dispatch Handler
+  const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
+  const [isSendingPrintApi, setIsSendingPrintApi] = useState(false);
+  const [printApiResponse, setPrintApiResponse] = useState(null);
+
+  const handleOpenPrintModal = () => {
+    setPrintApiResponse(null);
+    setIsPrintModalOpen(true);
+  };
+
+  const handleSendPrintApi = async () => {
+    setIsSendingPrintApi(true);
+    setPrintApiResponse(null);
+
+    const validChannels = activeChannels.filter(c => c.imei && (c.st === 'PASS' || c.st === 'CON'));
+    const payload = {
+      meter_no: 'NIC_JIG_STAGE_4',
+      stage_id: 4,
+      cycle_id: cycleId || 101,
+      cycle_uuid: cycleUuid || 'DEMO-CYC-101',
+      operator_id: user?.employee_id || 'ZMRD004',
+      channels: validChannels.map((c, idx) => ({
+        s_no: idx + 1,
+        imei_no: String(c.imei || '').trim(),
+        comms_technology: String(c.comms_technology || '12')
+      }))
+    };
+
+    try {
+      let res;
+      if (isDemoMode) {
+        await new Promise(r => setTimeout(r, 600));
+        res = {
+          success: true,
+          status: 200,
+          message: `Laser & Thermal Marking Engine received ${payload.channels.length} channel label payloads successfully.`,
+          timestamp: new Date().toISOString(),
+          dispatched_count: payload.channels.length,
+          cycle_uuid: payload.cycle_uuid,
+          printer_status: 'ONLINE (Ready)',
+          channels: payload.channels
+        };
+      } else {
+        res = await jigService.sendPrintPayload(payload);
+      }
+
+      setPrintApiResponse(res);
+      const updatedPrinted = { ...printedChannels };
+      validChannels.forEach(c => {
+        updatedPrinted[c.ch] = true;
+      });
+      setPrintedChannels(updatedPrinted);
+      appendLog(`[${new Date().toLocaleTimeString()}] [PRINT API] - Print payload for ${payload.channels.length} channels dispatched successfully.`);
+    } catch (err) {
+      setPrintApiResponse({
+        success: false,
+        error: err.message || 'Failed to dispatch print API request'
+      });
+    } finally {
+      setIsSendingPrintApi(false);
+    }
+  };
+
   // Helper to auto-connect USB port on backend
   const autoConnectPort = async (portToConnect) => {
     if (!portToConnect) return;
@@ -339,6 +478,15 @@ export default function StageExecution() {
 
   // 1. Fetch available USB ports from Node.js backend
   const fetchAvailableUsbPorts = async () => {
+    if (isDemoMode) {
+      setAvailablePorts(['DEMO-PORT-01', 'DEMO-PORT-02']);
+      setDetailedPorts([
+        { path: 'DEMO-PORT-01', friendlyName: 'DEMO-PORT-01 (Virtual Jig USB)', shortName: 'DEMO-PORT-01' },
+        { path: 'DEMO-PORT-02', friendlyName: 'DEMO-PORT-02 (Loopback Simulator)', shortName: 'DEMO-PORT-02' }
+      ]);
+      setSelectedPort('DEMO-PORT-01');
+      return;
+    }
     try {
       const res = await jigService.listUsbPorts();
       const rawPorts = res.ports || [];
@@ -587,6 +735,36 @@ export default function StageExecution() {
 
   // Start Hardware Test Protocol
   const handleJigStart = async () => {
+    if (isDemoMode) {
+      setTestState('STARTING');
+      setIsSavedToDb(false);
+      setPrintedChannels({});
+
+      const now = new Date();
+      const timeStr = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}.${pad(now.getMilliseconds(), 3)}`;
+
+      appendLog(`[${timeStr}] [TX] - START (DEMO PROTOCOL INITIATED)`);
+
+      setTimeout(() => {
+        appendLog(`[${timeStr}] [RX] - ACK (DEMO PROTOCOL CONFIRMED)`);
+        appendLog(`[${timeStr}] [TX] - GET_DATA`);
+
+        setTimeout(() => {
+          const freshDemo = generateDemoTelemetry();
+          setJigData(freshDemo.data);
+          setCycleId(freshDemo.cycleId);
+          setCycleUuid(freshDemo.cycleUuid);
+          setSaveTimestamp(freshDemo.timestamp);
+          setIsSavedToDb(true);
+          setSavedCount(8);
+          setTestState('DATA_RECEIVED');
+          freshDemo.logs.forEach(l => appendLog(l));
+        }, 600);
+      }, 500);
+
+      return;
+    }
+
     if (!usbConnected) {
       showWarningAlert('USB Removed / Disconnected', 'Please plug in a USB cable / Type-C device before starting Jig test.');
       return;
@@ -744,6 +922,21 @@ export default function StageExecution() {
 
   // Reset Test Console
   const handleResetJigConsole = () => {
+    if (isDemoMode) {
+      setJigData(null);
+      setJigLogs([]);
+      setCycleId(null);
+      setCycleUuid(null);
+      setSaveTimestamp(null);
+      setIsSavedToDb(false);
+      setSavedCount(0);
+      setDbDuplicates([]);
+      setEditingChannelId(null);
+      setPrintedChannels({});
+      setTestState('IDLE');
+      showWarningAlert('Demo Console Reset', 'Stage 4 Demo test console reset to initial idle state.');
+      return;
+    }
     setJigData(null);
     setJigLogs([]);
     setIsSavedToDb(false);
@@ -771,7 +964,9 @@ export default function StageExecution() {
   };
 
   // Determine button enablement
-  const isStartDisabled = !usbConnected || testState === 'STARTING' || testState === 'SAVING';
+  const isStartDisabled = isDemoMode
+    ? (testState === 'STARTING' || testState === 'SAVING')
+    : (!usbConnected || testState === 'STARTING' || testState === 'SAVING');
   const isSaveDisabled = !jigData || !jigData.ch || testState === 'SAVING' || testState === 'SAVED' || testState === 'STARTING';
   const isExportDisabled = !isSavedToDb;
 
@@ -1107,6 +1302,11 @@ export default function StageExecution() {
                 <h1 className="fs-3 mb-0 fw-bold text-dark d-flex align-items-center gap-2">
                   <i className="ti ti-tools text-primary"></i>
                   <span>Jig Test Console</span>
+                  {isDemoMode && (
+                    <span className="badge bg-warning text-dark font-mono fs-6 px-2.5 py-1 shadow-2xs ms-1">
+                      <i className="ti ti-flask me-1"></i>DEMO TEST
+                    </span>
+                  )}
                 </h1>
 
                 {cycleUuid && (
@@ -1115,7 +1315,11 @@ export default function StageExecution() {
                   </span>
                 )}
 
-                {usbConnected ? (
+                {isDemoMode ? (
+                  <span className="badge bg-success text-white px-3 py-1.5 font-mono text-xs d-inline-flex align-items-center gap-1 shadow-2xs">
+                    <i className="ti ti-usb fs-6"></i> DEMO-PORT-01 (Emulated) Connected
+                  </span>
+                ) : usbConnected ? (
                   <span className="badge bg-success text-white px-3 py-1.5 font-mono text-xs d-inline-flex align-items-center gap-1 shadow-2xs">
                     <i className="ti ti-usb fs-6"></i> {
                       formatPortName(
@@ -1178,14 +1382,14 @@ export default function StageExecution() {
                   }`}
                 onClick={handleJigStart}
                 disabled={isStartDisabled}
-                title="Send START to USB -> Receive Data -> Check Duplicates -> Save DB"
+                title={isDemoMode ? "Simulate Full Jig Test Protocol & Telemetry" : "Send START to USB -> Receive Data -> Check Duplicates -> Save DB"}
               >
                 <i className={`ti ${testState === 'STARTING' || testState === 'SAVING' ? 'ti-loader spin' : 'ti-player-play'} me-1`}></i>
                 {testState === 'STARTING'
-                  ? 'Communicating Protocol...'
+                  ? (isDemoMode ? 'Simulating Protocol...' : 'Communicating Protocol...')
                   : testState === 'SAVING'
                     ? 'Saving to DB...'
-                    : 'Start Jig test'}
+                    : (isDemoMode ? 'Start Demo Test' : 'Start Jig test')}
               </button>
             </div>
           </div>
@@ -1265,6 +1469,17 @@ export default function StageExecution() {
           </div>
 
           <div className="d-flex align-items-center gap-2 flex-wrap">
+            {/* Print Button (To the left of Validate QR's) */}
+            <button
+              type="button"
+              onClick={handleOpenPrintModal}
+              disabled={!jigData || !jigData.ch}
+              className="btn btn-primary px-4 fw-bold shadow-2xs"
+              title="Print Channel JSON Data & Send to Printer API"
+            >
+              <i className="ti ti-printer me-1.5 fs-5"></i> Print
+            </button>
+
             {/* Validate QR's Button */}
             <button
               type="button"
@@ -1392,6 +1607,125 @@ export default function StageExecution() {
                     </div>
                   );
                 })}
+              </div>
+            );
+          })()}
+        </div>
+      </Modal>
+
+      {/* Laser & Thermal Printer JSON Payload Modal */}
+      <Modal
+        isOpen={isPrintModalOpen}
+        onClose={() => setIsPrintModalOpen(false)}
+        title="NIC Card Label Print Payload (JSON Data)"
+        size="lg"
+      >
+        <div className="p-2">
+          {(() => {
+            const validChannels = activeChannels.filter(c => c.imei && (c.st === 'PASS' || c.st === 'CON'));
+            if (validChannels.length === 0) {
+              return (
+                <div className="text-center py-5 text-muted border rounded-3 bg-light">
+                  <i className="ti ti-printer-off fs-1 d-block mb-2 text-warning opacity-75"></i>
+                  <h6 className="fw-bold text-dark mb-1">No Valid Channels to Print</h6>
+                  <p className="small mb-0 text-secondary">
+                    Please click "Start Demo Test" or "Start Jig test" to generate channel telemetry with valid IMEI numbers before printing.
+                  </p>
+                </div>
+              );
+            }
+
+            const batchJson = validChannels.map((c, idx) => ({
+              s_no: idx + 1,
+              imei_no: String(c.imei || '').trim(),
+              comms_technology: String(c.comms_technology || "12")
+            }));
+
+            return (
+              <div>
+                {/* Header Summary Bar inside Modal */}
+                <div className="d-flex flex-column flex-sm-row justify-content-between align-items-sm-center gap-2 mb-3 p-3 bg-light rounded-3 border">
+                  <div>
+                    <div className="fw-bold text-dark d-flex align-items-center gap-2">
+                      <i className="ti ti-printer text-primary fs-5"></i>
+                      <span>Stage 4 Laser / Thermal Print Dispatch</span>
+                      <span className="badge bg-primary text-white font-mono px-2 py-0.5" style={{ fontSize: '0.72rem' }}>
+                        {batchJson.length} Channels
+                      </span>
+                      {cycleUuid && (
+                        <span className="badge bg-dark text-white font-mono px-2 py-0.5" style={{ fontSize: '0.72rem' }}>
+                          {cycleUuid}
+                        </span>
+                      )}
+                    </div>
+                    <small className="text-muted d-block mt-0.5">
+                      Batch API payload with sequential <code className="text-primary font-mono fw-bold">s_no</code>, <code className="text-primary font-mono fw-bold">imei_no</code>, and <code className="text-primary font-mono fw-bold">comms_technology</code> dispatched to Print Engine.
+                    </small>
+                  </div>
+
+                  <div className="d-flex align-items-center gap-2 flex-wrap">
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-outline-secondary font-mono d-flex align-items-center gap-1"
+                      onClick={() => {
+                        navigator.clipboard.writeText(JSON.stringify(batchJson, null, 2));
+                        showWarningAlert('JSON Copied', 'Batch print payload copied to clipboard.');
+                      }}
+                    >
+                      <i className="ti ti-copy"></i> Copy JSON
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-primary fw-bold font-mono d-flex align-items-center gap-1 shadow-sm"
+                      onClick={handleSendPrintApi}
+                      disabled={isSendingPrintApi}
+                    >
+                      <i className={`ti ${isSendingPrintApi ? 'ti-loader spin' : 'ti-send'}`}></i>
+                      {isSendingPrintApi ? 'Sending API...' : 'Send to Printer API'}
+                    </button>
+                  </div>
+                </div>
+
+                {/* API Response Alert if already sent */}
+                {printApiResponse && (
+                  <div className={`alert ${printApiResponse.success ? 'alert-success' : 'alert-danger'} p-3 rounded-3 mb-3 d-flex align-items-start gap-2 shadow-2xs`}>
+                    <i className={`ti ${printApiResponse.success ? 'ti-circle-check fs-4 text-success' : 'ti-alert-circle fs-4 text-danger'} flex-shrink-0 mt-0.5`}></i>
+                    <div className="flex-grow-1">
+                      <div className="d-flex justify-content-between align-items-center">
+                        <strong className="d-block">{printApiResponse.success ? 'HTTP 200 OK — Batch Print API Dispatched Successfully' : 'Print API Error'}</strong>
+                        <span className="badge bg-white text-dark border font-mono text-2xs">
+                          {printApiResponse.timestamp || new Date().toLocaleTimeString()}
+                        </span>
+                      </div>
+                      <span className="small d-block mt-0.5">{printApiResponse.message || printApiResponse.error}</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Batch API JSON Payload Display */}
+                <div className="card border rounded-3 bg-dark text-white font-mono shadow-sm mb-3">
+                  <div className="card-header bg-dark border-secondary py-2 px-3 d-flex justify-content-between align-items-center">
+                    <span className="text-warning-emphasis fw-bold small d-flex align-items-center gap-1.5">
+                      <i className="ti ti-code"></i>
+                      <span>Batch API JSON Payload ({batchJson.length} items &bull; s_no indexed)</span>
+                    </span>
+                    <button
+                      type="button"
+                      className="btn btn-xs btn-outline-light font-mono"
+                      onClick={() => {
+                        navigator.clipboard.writeText(JSON.stringify(batchJson, null, 2));
+                        showWarningAlert('JSON Copied', 'Batch JSON payload copied to clipboard.');
+                      }}
+                    >
+                      <i className="ti ti-copy me-1"></i>Copy
+                    </button>
+                  </div>
+                  <div className="card-body p-3 text-xs" style={{ maxHeight: '460px', overflowY: 'auto' }}>
+                    <pre className="mb-0 text-success" style={{ fontFamily: 'monospace', fontSize: '0.85rem', lineHeight: '1.5', whiteSpace: 'pre-wrap' }}>
+                      {JSON.stringify(batchJson, null, 2)}
+                    </pre>
+                  </div>
+                </div>
               </div>
             );
           })()}

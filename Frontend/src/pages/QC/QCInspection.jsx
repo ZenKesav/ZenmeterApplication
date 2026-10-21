@@ -89,8 +89,7 @@ export default function QCInspection() {
     <>
       <div className="row mb-4">
         <div className="col-12">
-          <h1 className="fs-3 mb-1 fw-bold text-dark">Quality Control Inspection Console</h1>
-          <p className="text-secondary mb-0">Verify Traceability, Physical Seal & Approve Final Dispatch</p>
+          <h1 className="fs-3 mb-0 fw-bold text-dark">Quality Control Inspection Console</h1>
         </div>
       </div>
 

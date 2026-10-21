@@ -337,13 +337,10 @@ export default function UserProfile() {
     <>
       <div className="row mb-4">
         <div className="col-12">
-          <h1 className="fs-3 mb-1 fw-bold text-dark d-flex align-items-center gap-2">
+          <h1 className="fs-3 mb-0 fw-bold text-dark d-flex align-items-center gap-2">
             <i className="ti ti-user-circle text-primary"></i>
             User Profile
           </h1>
-          <p className="text-secondary mb-0">
-            Account Details, Profile Picture & Operator Stage Assignment
-          </p>
         </div>
       </div>
 
@@ -388,7 +385,7 @@ export default function UserProfile() {
                     </div>
 
                     <div className="fw-bold fs-5 text-dark mb-1">{name || user?.name || 'Zenmeter User'}</div>
-                    <div className="d-flex justify-content-center gap-2 flex-wrap mb-2">
+                    <div className="d-flex justify-content-center gap-2 flex-wrap mb-0">
                       <span className="badge bg-dark text-white px-2.5 py-1 font-mono">
                         <i className="ti ti-id me-1"></i>{user?.employee_id || 'OPERATOR'}
                       </span>
@@ -396,10 +393,6 @@ export default function UserProfile() {
                         <i className="ti ti-shield me-1"></i>{user?.role || 'USER'}
                       </span>
                     </div>
-                    <span className="badge bg-success-subtle text-success border border-success-subtle px-3 py-1 font-mono">
-                      <i className="ti ti-subtask me-1"></i>
-                      {isAdmin ? 'All Factory Stages (1-11 Admin)' : (user?.assigned_stage || (user?.stage_id ? `Stage ${user.stage_id}` : 'General Factory'))}
-                    </span>
                   </div>
 
                   {/* Right Column: User Account Details */}
@@ -453,14 +446,96 @@ export default function UserProfile() {
                         />
                       </div>
 
+                      {/* Assigned Stage Specification */}
                       <div className="col-12">
-                        <label className="form-label fw-semibold text-dark small">Assigned Stage Specification</label>
-                        <input
-                          type="text"
-                          className="form-control bg-light font-mono"
-                          value={isAdmin ? 'All Factory Stages (1-11 Admin)' : (user?.assigned_stage || (user?.stage_id ? `Stage ${user.stage_id}` : 'General Factory'))}
-                          disabled
-                        />
+                        <label className="form-label fw-semibold text-dark small d-flex justify-content-between align-items-center mb-1.5">
+                          <span className="d-flex align-items-center gap-1.5">
+                            <i className="ti ti-subtask text-primary"></i>
+                            Assigned Stage Specification
+                          </span>
+                          {isAdmin ? (
+                            <span className="badge bg-primary-subtle text-primary border border-primary-subtle font-mono fw-normal">
+                              Full Factory Authorization
+                            </span>
+                          ) : (
+                            <span className="badge bg-success-subtle text-success border border-success-subtle font-mono fw-normal">
+                              {user?.assigned_stage
+                                ? `${Array.from(new Set(user.assigned_stage.split(',').map(s => s.trim()).filter(Boolean))).length} Stages Configured`
+                                : user?.stage_id
+                                  ? '1 Stage Configured'
+                                  : 'General Access'}
+                            </span>
+                          )}
+                        </label>
+
+                        {isAdmin ? (
+                          <div className="p-2.5 bg-light rounded-3 border d-flex align-items-center gap-2">
+                            <span className="badge bg-primary text-white font-mono px-2 py-1">ALL STAGES</span>
+                            <span className="text-dark small fw-medium">All Factory Production Stages (Full Factory Pipeline Authorization)</span>
+                          </div>
+                        ) : user?.assigned_stage ? (
+                          <div className="p-3 bg-light-subtle rounded-3 border">
+                            <div className="row g-2">
+                              {Array.from(new Set(user.assigned_stage.split(',').map(s => s.trim()).filter(Boolean))).map((stgStr, idx) => {
+                                let stageNum = null;
+                                let stageName = stgStr;
+                                const fullMatch = stgStr.match(/^(?:stage\s*)?(\d+)(?:\s*stage)?\s*[-–:]\s*(.+)$/i);
+                                if (fullMatch) {
+                                  stageNum = fullMatch[1];
+                                  stageName = fullMatch[2].trim();
+                                } else {
+                                  const numOnlyMatch = stgStr.match(/^(?:stage\s*)?(\d+)(?:\s*stage)?$/i);
+                                  if (numOnlyMatch) {
+                                    stageNum = numOnlyMatch[1];
+                                    stageName = `Stage ${stageNum}`;
+                                  }
+                                }
+
+                                return (
+                                  <div key={idx} className="col-12 col-sm-6 col-md-4">
+                                    <div
+                                      className="d-flex align-items-center bg-white border border-secondary-subtle rounded-2 px-2.5 py-2 shadow-2xs h-100"
+                                      style={{ minHeight: '44px' }}
+                                    >
+                                      {stageNum ? (
+                                        <span
+                                          className="badge text-white font-mono fw-bold px-2 py-1 rounded me-2 flex-shrink-0"
+                                          style={{
+                                            backgroundColor: '#E66239',
+                                            fontSize: '0.72rem',
+                                            letterSpacing: '0.3px',
+                                            minWidth: '56px',
+                                            textAlign: 'center'
+                                          }}
+                                        >
+                                          Stage {stageNum}
+                                        </span>
+                                      ) : (
+                                        <span
+                                          className="badge bg-secondary-subtle text-secondary font-mono fw-bold px-2 py-1 rounded me-2 flex-shrink-0"
+                                          style={{ fontSize: '0.72rem' }}
+                                        >
+                                          <i className="ti ti-subtask"></i>
+                                        </span>
+                                      )}
+                                      <span
+                                        className="text-dark fw-medium small lh-sm"
+                                        title={stageName}
+                                        style={{ fontSize: '0.8125rem' }}
+                                      >
+                                        {stageName}
+                                      </span>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="p-2.5 bg-light rounded-3 border text-muted small font-mono">
+                            {user?.stage_id ? `Stage ${user.stage_id}` : 'General Factory Operations'}
+                          </div>
+                        )}
                       </div>
                     </div>
 

@@ -310,16 +310,19 @@ class JigTestRepository {
         if (filters.search) {
           const term = `%${String(filters.search).toLowerCase()}%`;
           whereClauses.push(`(
-            LOWER(COALESCE(c.cycle_uuid, '')) LIKE $${pIndex} OR
-            LOWER(c.operator_id) LIKE $${pIndex} OR
+            LOWER(COALESCE(c.cycle_uuid, CONCAT('ZMRJIG', LPAD(CAST(c.cycle_id AS TEXT), 4, '0')))) LIKE $${pIndex} OR
+            LOWER(COALESCE(c.operator_id, '')) LIKE $${pIndex} OR
+            LOWER(COALESCE(u.employee_id, '')) LIKE $${pIndex} OR
             LOWER(COALESCE(u.name, '')) LIKE $${pIndex} OR
+            LOWER(COALESCE(u.user_name, '')) LIKE $${pIndex} OR
             EXISTS (
               SELECT 1 FROM nic_card_test_results nr 
               WHERE nr.cycle_id = c.cycle_id AND (
                 LOWER(COALESCE(nr.nic_uuid, '')) LIKE $${pIndex} OR 
                 LOWER(COALESCE(nr.imei, '')) LIKE $${pIndex}
               )
-            )
+            ) OR
+            LOWER(CONCAT('zmrdnic', c.cycle_id)) LIKE $${pIndex}
           )`);
           params.push(term);
           pIndex++;

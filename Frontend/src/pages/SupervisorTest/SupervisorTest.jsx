@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { supervisorTestService } from '../../services/apiServices';
 import { Modal, SkeletonTable, Pagination } from '../../components/CommonComponents';
 import { useAuth } from '../../app/store';
@@ -13,6 +13,7 @@ export default function SupervisorTest() {
 
   const [tests, setTests] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [stageFilter, setStageFilter] = useState('');
@@ -42,7 +43,10 @@ export default function SupervisorTest() {
     );
   }
 
+  const latestSupervisorReqRef = useRef(0);
+
   const fetchSupervisorTests = () => {
+    const reqId = ++latestSupervisorReqRef.current;
     setLoading(true);
     const supervisorId = !isFullAccess ? (user?.employee_id || user?.user_name) : undefined;
     const assignedStagesStr = assignedStageNumbers.length > 0 ? assignedStageNumbers.join(',') : undefined;
@@ -54,19 +58,28 @@ export default function SupervisorTest() {
       status: statusFilter,
       search
     }).then(res => {
-      const recordsData = Array.isArray(res) ? res : (res?.tests || res?.data || []);
-      setTests(recordsData);
-      setLoading(false);
+      if (reqId === latestSupervisorReqRef.current) {
+        const recordsData = Array.isArray(res) ? res : (res?.tests || res?.data || []);
+        setTests(recordsData);
+        setLoading(false);
+        setInitialLoading(false);
+      }
     }).catch(err => {
-      console.error('Error fetching Supervisor Test records:', err);
-      setTests([]);
-      setLoading(false);
+      if (reqId === latestSupervisorReqRef.current) {
+        console.error('Error fetching Supervisor Test records:', err);
+        setTests([]);
+        setLoading(false);
+        setInitialLoading(false);
+      }
     });
   };
 
   useEffect(() => {
-    fetchSupervisorTests();
-    setCurrentPage(1);
+    const timer = setTimeout(() => {
+      fetchSupervisorTests();
+      setCurrentPage(1);
+    }, 150);
+    return () => clearTimeout(timer);
   }, [search, statusFilter, stageFilter]);
 
   // Filter local tests list
@@ -114,24 +127,25 @@ export default function SupervisorTest() {
       {/* Header Bar */}
       <div className="row mb-4">
         <div className="col-12">
-          <h1 className="fs-3 mb-1 fw-bold text-dark d-flex align-items-center gap-2">
+          <h1 className="fs-3 mb-0 fw-bold text-dark d-flex align-items-center gap-2">
             <i className="ti ti-user-check text-primary"></i>
             Supervisor Stage Test Portal
           </h1>
-          <p className="text-secondary mb-0">
-            Dedicated Supervisor Stage Telemetry Validation & Test Execution Database
-          </p>
         </div>
       </div>
 
       {/* Filter Bar */}
-      <div className="card shadow-sm mb-4">
+      <div className="card shadow-sm border mb-4">
         <div className="card-body p-3 d-flex flex-wrap gap-3 align-items-center justify-content-between">
           <div className="d-flex align-items-center gap-2 flex-grow-1" style={{ maxWidth: '680px' }}>
             {/* Search Input */}
             <div className="input-group">
               <span className="input-group-text bg-white border-end-0">
-                <i className="ti ti-search text-muted"></i>
+                {loading && !initialLoading ? (
+                  <span className="spinner-border spinner-border-sm text-primary" style={{ width: '0.85rem', height: '0.85rem' }} role="status"></span>
+                ) : (
+                  <i className="ti ti-search text-muted"></i>
+                )}
               </span>
               <input
                 type="text"
@@ -153,7 +167,7 @@ export default function SupervisorTest() {
                 className="form-select border-start-0 font-mono fw-semibold text-dark"
               >
                 <option value="">
-                  All Assigned Stages ({assignedStageNumbers.length > 0 ? assignedStageNumbers.join(', ') : '1, 2, 4, 6, 7, 8'})
+                  {isFullAccess ? 'All Stages' : 'All Assigned Stages'}
                 </option>
                 {assignedStages.map(stg => (
                   <option key={stg.id} value={String(stg.id)}>
@@ -189,10 +203,10 @@ export default function SupervisorTest() {
       </div>
 
       {/* Supervisor Test Records Table */}
-      {loading ? (
+      {initialLoading ? (
         <SkeletonTable rows={6} columns={8} />
       ) : (
-        <div className="card shadow-sm">
+        <div className="card shadow-sm border">
           <div className="table-responsive">
             <table className="table mb-0 align-middle table-hover text-nowrap">
               <thead className="table-light">

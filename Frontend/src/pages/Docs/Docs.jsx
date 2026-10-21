@@ -7,10 +7,7 @@ const Docs = () => {
         <div className="col-12">
           <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 gap-3">
             <div>
-              <h1 className="fs-3 mb-1 fw-bold">Documentation</h1>
-              <p className="text-secondary mb-0">
-                Guide through setup, hardware stages, and API usage of the Zenmeter Application.
-              </p>
+              <h1 className="fs-3 mb-0 fw-bold">Documentation</h1>
             </div>
           </div>
         </div>

@@ -1,14 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../app/store';
 import { authService } from '../../services/authService';
 import { SkeletonTable, Pagination } from '../../components/CommonComponents';
 
 export default function LoginHistory() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterDate, setFilterDate] = useState('');
 
@@ -23,6 +25,16 @@ export default function LoginHistory() {
   // Non-admins (Supervisors, Operators, QC) are strictly limited to 'self'
   // Admins default to 'self' (e.g. from top-right popup) unless explicitly 'all' (from User Management)
   const currentScope = !isAdmin ? 'self' : (scopeParam === 'all' ? 'all' : 'self');
+
+  const handleBack = () => {
+    if (currentScope === 'all') {
+      navigate('/users');
+    } else if (window.history.state && window.history.state.idx > 0) {
+      navigate(-1);
+    } else {
+      navigate('/users');
+    }
+  };
 
   // Date formatting helpers: dd/mm/yyyy
   const formatDateDDMMYYYY = (dateStr) => {
@@ -100,23 +112,39 @@ export default function LoginHistory() {
     }
   };
 
-  const loadHistory = (scopeToLoad = currentScope) => {
+  const latestHistoryReqRef = React.useRef(0);
+
+  const loadHistory = (scopeToLoad = currentScope, searchVal = searchTerm, dateVal = filterDate) => {
+    const reqId = ++latestHistoryReqRef.current;
     setLoading(true);
-    authService.getAttendanceHistory({ scope: scopeToLoad })
+    const params = { scope: scopeToLoad };
+    if (searchVal && searchVal.trim()) params.search = searchVal.trim();
+    if (dateVal && dateVal.trim()) params.date = dateVal.trim();
+
+    authService.getAttendanceHistory(params)
       .then(res => {
-        const logs = res?.data || res?.history || (Array.isArray(res) ? res : []);
-        setHistory(logs);
-        setLoading(false);
+        if (reqId === latestHistoryReqRef.current) {
+          const logs = res?.data || res?.history || (Array.isArray(res) ? res : []);
+          setHistory(logs);
+          setLoading(false);
+          setInitialLoading(false);
+        }
       })
       .catch(err => {
-        console.error('Failed to load login history:', err);
-        setLoading(false);
+        if (reqId === latestHistoryReqRef.current) {
+          console.error('Failed to load login history:', err);
+          setLoading(false);
+          setInitialLoading(false);
+        }
       });
   };
 
   useEffect(() => {
-    loadHistory(currentScope);
-  }, [currentScope]);
+    const timer = setTimeout(() => {
+      loadHistory(currentScope, searchTerm, filterDate);
+    }, 150);
+    return () => clearTimeout(timer);
+  }, [currentScope, searchTerm, filterDate]);
 
   // Filter history based on scope, search term & date filter
   const filteredHistory = history.filter(item => {
@@ -155,19 +183,27 @@ export default function LoginHistory() {
       <div className="row mb-4">
         <div className="col-12 d-flex justify-content-between align-items-center flex-wrap gap-2">
           <div>
-            <h1 className="fs-3 mb-1 fw-bold text-dark d-flex align-items-center gap-2">
+            <h1 className="fs-3 mb-0 fw-bold text-dark d-flex align-items-center gap-2">
               <i className="ti ti-history text-primary"></i>
               <span>{currentScope === 'self' ? 'My Daily Login & Logout History' : 'User Daily Login & Logout History'}</span>
             </h1>
-            <p className="text-secondary mb-0">
-              {currentScope === 'self'
-                ? `System-recorded personal session activity & attendance history for ${user?.name || user?.user_name || 'logged-in user'} (${user?.employee_id || ''})`
-                : 'System-recorded user attendance history log with shift timing check & daily session tracking'}
-            </p>
           </div>
-          <button className="btn btn-outline-primary btn-sm fw-semibold shadow-xs" onClick={() => loadHistory(currentScope)}>
-            <i className="ti ti-refresh me-1"></i> Refresh History Log
-          </button>
+          <div className="d-flex align-items-center gap-2">
+            <button
+              type="button"
+              className="btn btn-outline-secondary btn-sm fw-semibold shadow-xs d-inline-flex align-items-center px-3 py-1.5 rounded-2"
+              onClick={handleBack}
+              title={currentScope === 'all' ? "Back to User Management" : "Back"}
+            >
+              <i className="ti ti-arrow-left me-1.5"></i> {currentScope === 'all' ? 'Back to User Management' : 'Back'}
+            </button>
+            <button
+              className="btn btn-outline-primary btn-sm fw-semibold shadow-xs d-inline-flex align-items-center px-3 py-1.5 rounded-2"
+              onClick={() => loadHistory(currentScope)}
+            >
+              <i className="ti ti-refresh me-1.5"></i> Refresh History Log
+            </button>
+          </div>
         </div>
       </div>
 
@@ -202,13 +238,17 @@ export default function LoginHistory() {
       )}
 
       {/* Filter & Search Bar */}
-      <div className="card shadow-sm border-0 mb-4">
+      <div className="card shadow-sm border mb-4">
         <div className="card-body p-3">
           <div className="row g-2 align-items-center">
             <div className="col-md-5">
               <div className="input-group">
                 <span className="input-group-text bg-white text-muted border-end-0">
-                  <i className="ti ti-search"></i>
+                  {loading && !initialLoading ? (
+                    <span className="spinner-border spinner-border-sm text-primary" style={{ width: '0.85rem', height: '0.85rem' }} role="status"></span>
+                  ) : (
+                    <i className="ti ti-search"></i>
+                  )}
                 </span>
                 <input
                   type="text"
@@ -259,8 +299,8 @@ export default function LoginHistory() {
       </div>
 
       {/* History Data Table Card */}
-      <div className="card shadow-sm border-0">
-        {loading ? (
+      <div className="card shadow-sm border">
+        {initialLoading ? (
           <SkeletonTable rows={8} columns={8} />
         ) : (
           <>

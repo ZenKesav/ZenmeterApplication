@@ -1,8 +1,22 @@
 const { query } = require('../config/database');
 
 class RoleRepository {
-  static async findAll() {
-    return await query.all(`SELECT * FROM roles ORDER BY id ASC`);
+  static async findAll({ search, status } = {}) {
+    let sql = `SELECT * FROM roles`;
+    let params = [];
+    let conds = [];
+    if (search && search.trim()) {
+      conds.push(`(LOWER(role_name) LIKE ? OR LOWER(COALESCE(role_description, '')) LIKE ?)`);
+      const s = `%${search.trim().toLowerCase()}%`;
+      params.push(s, s);
+    }
+    if (status && status.trim()) {
+      conds.push(`LOWER(status) = LOWER(?)`);
+      params.push(status.trim());
+    }
+    if (conds.length > 0) sql += ` WHERE ` + conds.join(' AND ');
+    sql += ` ORDER BY id ASC`;
+    return await query.all(sql, params);
   }
 
   static async findById(id) {

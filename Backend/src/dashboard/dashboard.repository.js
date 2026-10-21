@@ -1,7 +1,7 @@
 const { query } = require('../config/database');
 
 class DashboardRepository {
-  static async getAttendanceHistory({ user_id, date, scope, self } = {}, currentUser) {
+  static async getAttendanceHistory({ user_id, date, scope, self, search } = {}, currentUser) {
     try {
       const todayDate = new Date().toISOString().split('T')[0];
       // 1. Auto-close unclosed sessions from past dates
@@ -47,6 +47,11 @@ class DashboardRepository {
     if (date) {
       conds.push(`attendance_date = ?`);
       params.push(date);
+    }
+    if (search && search.trim()) {
+      const s = `%${search.trim().toLowerCase()}%`;
+      conds.push(`(LOWER(employee_id) LIKE ? OR LOWER(user_name) LIKE ? OR LOWER(name) LIKE ? OR LOWER(shift_name) LIKE ? OR LOWER(status) LIKE ?)`);
+      params.push(s, s, s, s, s);
     }
     if (conds.length > 0) sql += ` WHERE ` + conds.join(' AND ');
     sql += ` ORDER BY id DESC LIMIT 200`;

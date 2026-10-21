@@ -1,15 +1,29 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../app/store';
+import { getUserAssignedStages } from '../../utils/stageUtils';
 import { userService, roleService, stageManagementService } from '../../services/apiServices';
 import { Modal, SkeletonTable, Pagination, PasswordRequirements, validatePasswordCriteria } from '../../components/CommonComponents';
 import { showSuccessAlert, showErrorAlert, showConfirmAlert } from '../../utils/swal';
 
 export default function UserList() {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const rawRole = user?.role || '';
+  const normRole = rawRole.toUpperCase().replace(/\s+/g, '_');
+  const isAdmin = normRole === 'ADMIN' || normRole.includes('ADMIN') || normRole.includes('IT');
+  const isSupervisor = (normRole === 'SUPERVISOR' || normRole.includes('SUPERVISOR')) && !isAdmin;
+
+  const supervisorAssignedStages = getUserAssignedStages(user);
+  const supervisorStageNumbers = new Set(
+    supervisorAssignedStages.map(s => Number(s.stage_number || s.id))
+  );
+
   const [users, setUsers] = useState([]);
   const [activeRoles, setActiveRoles] = useState([]);
   const [activeStages, setActiveStages] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);
 
   const isFullStageAccessRole = (roleName) => {
     if (!roleName) return false;
@@ -135,20 +149,32 @@ export default function UserList() {
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const latestUsersReqRef = useRef(0);
 
   const fetchUsers = (searchVal = searchTerm, roleVal = roleFilter, statusVal = statusFilter) => {
+    const reqId = ++latestUsersReqRef.current;
     setLoading(true);
     const params = {};
     if (searchVal && searchVal.trim()) params.search = searchVal.trim();
-    if (roleVal && roleVal.trim()) params.role = roleVal.trim();
+    if (isSupervisor) {
+      params.role = 'OPERATOR';
+    } else if (roleVal && roleVal.trim()) {
+      params.role = roleVal.trim();
+    }
     if (statusVal && statusVal.trim()) params.status = statusVal.trim();
 
     userService.getUsers(params).then(res => {
-      setUsers(Array.isArray(res) ? res : (res?.data || res?.users || []));
-      setLoading(false);
+      if (reqId === latestUsersReqRef.current) {
+        setUsers(Array.isArray(res) ? res : (res?.data || res?.users || []));
+        setLoading(false);
+        setInitialLoading(false);
+      }
     }).catch(err => {
-      console.error(err);
-      setLoading(false);
+      if (reqId === latestUsersReqRef.current) {
+        console.error(err);
+        setLoading(false);
+        setInitialLoading(false);
+      }
     });
   };
 
@@ -177,10 +203,16 @@ export default function UserList() {
   };
 
   useEffect(() => {
-    fetchUsers();
     fetchActiveRoles();
     fetchActiveStages();
   }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      fetchUsers(searchTerm, roleFilter, statusFilter);
+    }, 150);
+    return () => clearTimeout(timer);
+  }, [searchTerm, roleFilter, statusFilter]);
 
   const handleCreateUser = async (e) => {
     e.preventDefault();
@@ -388,8 +420,18 @@ export default function UserList() {
     if (userObj.assigned_stage) {
       initialStages = userObj.assigned_stage.split(',').map(s => s.trim()).filter(Boolean);
     }
-    setReassignStages(initialStages);
-    initialReassignRef.current = initialStages;
+    if (isSupervisor) {
+      const inScopeStages = initialStages.filter(stgStr => {
+        const numMatch = stgStr.match(/^(\d+)/);
+        const sNum = numMatch ? Number(numMatch[1]) : null;
+        return sNum && supervisorStageNumbers.has(sNum);
+      });
+      setReassignStages(inScopeStages);
+      initialReassignRef.current = inScopeStages;
+    } else {
+      setReassignStages(initialStages);
+      initialReassignRef.current = initialStages;
+    }
     setIsReassignOpen(true);
   };
 
@@ -398,14 +440,32 @@ export default function UserList() {
     if (!reassignUser) return;
     setSubmitting(true);
     try {
-      const selectedStageNames = reassignStages.join(', ');
-      let selectedStageId = null;
-      if (reassignStages.length > 0) {
-        const firstStage = activeStages.find(s => `${s.stage_number} stage - ${s.stage_name}` === reassignStages[0] || s.stage_name === reassignStages[0]);
-        if (firstStage) {
-          selectedStageId = firstStage.stage_number || firstStage.id;
-        }
+      let finalStageNames = [];
+      if (isSupervisor) {
+        const existingStages = (reassignUser.assigned_stage ? reassignUser.assigned_stage.split(',').map(s => s.trim()).filter(Boolean) : []);
+        const outsideScopeStages = existingStages.filter(stgStr => {
+          const numMatch = stgStr.match(/^(\d+)/);
+          const sNum = numMatch ? Number(numMatch[1]) : null;
+          return sNum && !supervisorStageNumbers.has(sNum);
+        });
+        finalStageNames = [...outsideScopeStages, ...reassignStages];
+      } else {
+        finalStageNames = [...reassignStages];
       }
+
+      finalStageNames.sort((a, b) => {
+        const numA = parseInt(a, 10) || 0;
+        const numB = parseInt(b, 10) || 0;
+        return numA - numB;
+      });
+
+      let selectedStageId = null;
+      if (finalStageNames.length > 0) {
+        const firstNum = parseInt(finalStageNames[0], 10);
+        if (!isNaN(firstNum)) selectedStageId = firstNum;
+      }
+
+      const supervisorDetails = `${user?.name || 'Supervisor'} (${user?.employee_id || 'SUP'})`;
 
       await userService.updateUser(reassignUser.id, {
         name: reassignUser.name,
@@ -414,11 +474,16 @@ export default function UserList() {
         gender: reassignUser.gender || 'Male',
         role: reassignUser.role,
         stage_id: selectedStageId,
-        assigned_stage: selectedStageNames || null,
-        status: reassignUser.status || 'ACTIVE'
+        assigned_stage: finalStageNames.join(', ') || null,
+        status: reassignUser.status || 'ACTIVE',
+        reassigned_by: supervisorDetails,
+        updated_by: supervisorDetails
       });
 
-      showSuccessAlert('Stage Re-assigned', `Production stages for '${reassignUser.name}' (${reassignUser.employee_id}) updated successfully!`);
+      showSuccessAlert(
+        isSupervisor ? 'Stage Assigned Successfully' : 'Stage Re-assigned',
+        `Production stages for operator '${reassignUser.name}' (${reassignUser.employee_id}) updated successfully!`
+      );
       setIsReassignOpen(false);
       fetchUsers();
     } catch (err) {
@@ -459,7 +524,7 @@ export default function UserList() {
     return (
       <button
         onClick={() => handleOpenReassign(u)}
-        className="btn btn-sm btn-outline-primary py-0.5 px-2.5 rounded-pill font-sans shadow-2xs fw-semibold"
+        className="btn btn-sm btn-outline-primary py-0.5 px-2.5 rounded-pill font-sans shadow-2xs fw-semibold d-inline-flex align-items-center"
         style={{ fontSize: '0.75rem' }}
         title="Re-assign Production Stages"
       >
@@ -468,9 +533,21 @@ export default function UserList() {
     );
   };
 
-  const paginatedUsers = users.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  // Only operator users for supervisor console
+  const displayedUsers = isSupervisor
+    ? users.filter(u => {
+        const r = (u.role || '').toUpperCase().replace(/\s+/g, '_');
+        return r === 'OPERATOR' || r.includes('OPERATOR');
+      })
+    : users;
+
+  const paginatedUsers = displayedUsers.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   const renderStageCheckboxSelector = (selectedList, setSelectedList) => {
+    const stagesToRender = isSupervisor
+      ? activeStages.filter(s => supervisorStageNumbers.has(Number(s.stage_number || s.id)))
+      : activeStages;
+
     const toggleStage = (stageVal) => {
       if (selectedList.includes(stageVal)) {
         setSelectedList(selectedList.filter(s => s !== stageVal));
@@ -480,7 +557,7 @@ export default function UserList() {
     };
 
     const handleSelectAll = () => {
-      const allVals = activeStages.map(s => `${s.stage_number} stage - ${s.stage_name}`);
+      const allVals = stagesToRender.map(s => `${s.stage_number} stage - ${s.stage_name}`);
       setSelectedList(allVals);
     };
 
@@ -492,7 +569,7 @@ export default function UserList() {
       <div className="mb-4">
         <div className="d-flex justify-content-between align-items-center mb-1">
           <label className="form-label fw-semibold text-dark small mb-0">
-            Select Assigned Stages (Tick Box Selection)
+            {isSupervisor ? 'Select Stages (Supervisor Authorized Scope)' : 'Select Assigned Stages (Tick Box Selection)'}
             {selectedList.length > 0 && (
               <span className="badge bg-primary text-white ms-2 px-2 py-1">
                 {selectedList.length} Selected
@@ -520,11 +597,15 @@ export default function UserList() {
           </div>
         </div>
 
-        <div className="border rounded bg-light-subtle p-2" style={{ maxHeight: '190px', overflowY: 'auto' }}>
-          {activeStages.length === 0 ? (
-            <div className="text-muted small p-2 text-center">No active stages found in Stage Management</div>
+        <div className="border rounded bg-light-subtle p-2" style={{ maxHeight: '220px', overflowY: 'auto' }}>
+          {stagesToRender.length === 0 ? (
+            <div className="text-muted small p-3 text-center">
+              {isSupervisor
+                ? 'No authorized supervisor stages found for your profile. Please contact Admin.'
+                : 'No active stages found in Stage Management'}
+            </div>
           ) : (
-            activeStages.map((s) => {
+            stagesToRender.map((s) => {
               const stageVal = `${s.stage_number} stage - ${s.stage_name}`;
               const isChecked = selectedList.some(item => {
                 if (!item) return false;
@@ -570,7 +651,7 @@ export default function UserList() {
                   </div>
                   {isChecked && (
                     <span className="badge bg-success-subtle text-success border border-success ms-2 small" style={{ fontSize: '0.7rem' }}>
-                      <i className="ti ti-check me-1"></i>Already Assigned
+                      <i className="ti ti-check me-1"></i>Selected
                     </span>
                   )}
                 </div>
@@ -587,67 +668,88 @@ export default function UserList() {
       <div className="row mb-4">
         <div className="col-12 d-flex justify-content-between align-items-center">
           <div>
-            <h1 className="fs-3 mb-1 fw-bold text-dark">User Management</h1>
-            <p className="text-secondary mb-0">System Accounts, Employee IDs, Roles & Active/Inactive Controls</p>
+            <h1 className="fs-3 mb-0 fw-bold text-dark">
+              {isSupervisor ? 'User Management (Operator Allocation)' : 'User Management'}
+            </h1>
+            {isSupervisor && (
+              <small className="text-muted d-block mt-0.5">
+                Supervisor Console &bull; Operator List & Authorized Stage Assignment
+              </small>
+            )}
           </div>
           <div className="d-flex gap-2">
-            <button className="btn btn-outline-primary btn-sm fw-semibold shadow-xs" onClick={() => navigate('/users/login-history?scope=all')}>
-              <i className="ti ti-history me-1"></i> View Login History
-            </button>
-            <button className="btn btn-primary btn-sm fw-medium shadow-sm" onClick={() => setIsCreateOpen(true)}>
-              <i className="ti ti-user-plus me-1"></i> Create New User
-            </button>
+            {!isSupervisor && (
+              <>
+                <button className="btn btn-outline-primary btn-sm fw-semibold shadow-xs" onClick={() => navigate('/users/login-history?scope=all')}>
+                  <i className="ti ti-history me-1"></i> View Login History
+                </button>
+                <button className="btn btn-primary btn-sm fw-medium shadow-sm" onClick={() => setIsCreateOpen(true)}>
+                  <i className="ti ti-user-plus me-1"></i> Create New User
+                </button>
+              </>
+            )}
           </div>
         </div>
       </div>
 
-      {loading ? (
-        <SkeletonTable rows={6} columns={8} />
-      ) : (
-        <div className="card shadow-sm border-0">
-          <div className="p-3 bg-light-subtle rounded-top border-bottom">
-            <div className="row g-2 align-items-center">
-              <div className="col-md-5 col-lg-4">
-                <div className="input-group input-group-sm">
-                  <span className="input-group-text bg-white border-end-0 text-muted">
+      {/* Users Data Table */}
+      <div className="card shadow-sm border">
+        <div className="p-3 bg-light-subtle rounded-top border-bottom">
+          <div className="row g-2 align-items-center">
+            <div className="col-md-5 col-lg-4">
+              <div className="input-group input-group-sm">
+                <span className="input-group-text bg-white border-end-0 text-muted">
+                  {loading && !initialLoading ? (
+                    <span className="spinner-border spinner-border-sm text-primary" style={{ width: '0.85rem', height: '0.85rem' }} role="status"></span>
+                  ) : (
                     <i className="ti ti-search"></i>
+                  )}
+                </span>
+                <input
+                  type="text"
+                  className="form-control form-control-sm border-start-0"
+                  placeholder="Search Employee ID, Name, Email, Phone..."
+                  value={searchTerm}
+                  onChange={(e) => {
+                    setSearchTerm(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                />
+                {searchTerm && (
+                  <button
+                    className="btn btn-sm btn-outline-secondary border-start-0"
+                    type="button"
+                    onClick={() => {
+                      setSearchTerm('');
+                      setCurrentPage(1);
+                    }}
+                  >
+                    <i className="ti ti-x"></i>
+                  </button>
+                )}
+              </div>
+            </div>
+            <div className="col-md-4 col-lg-3">
+              {isSupervisor ? (
+                <div className="input-group input-group-sm">
+                  <span className="input-group-text bg-white text-muted border-end-0">
+                    <i className="ti ti-user-shield text-primary"></i>
                   </span>
                   <input
                     type="text"
-                    className="form-control form-control-sm border-start-0"
-                    placeholder="Search Employee ID, Name, Email, Phone..."
-                    value={searchTerm}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setSearchTerm(val);
-                      setCurrentPage(1);
-                      fetchUsers(val, roleFilter);
-                    }}
+                    className="form-control form-control-sm bg-white border-start-0 text-dark fw-semibold"
+                    value="Role: Operators Only"
+                    disabled
+                    readOnly
                   />
-                  {searchTerm && (
-                    <button
-                      className="btn btn-sm btn-outline-secondary border-start-0"
-                      type="button"
-                      onClick={() => {
-                        setSearchTerm('');
-                        setCurrentPage(1);
-                        fetchUsers('', roleFilter);
-                      }}
-                    >
-                      <i className="ti ti-x"></i>
-                    </button>
-                  )}
                 </div>
-              </div>
-              <div className="col-md-4 col-lg-3">
+              ) : (
                 <select
                   className="form-select form-select-sm"
                   value={roleFilter}
                   onChange={(e) => {
-                    const val = e.target.value;
-                    setRoleFilter(val);
+                    setRoleFilter(e.target.value);
                     setCurrentPage(1);
-                    fetchUsers(searchTerm, val, statusFilter);
                   }}
                 >
                   <option value="">All Roles</option>
@@ -658,129 +760,143 @@ export default function UserList() {
                     );
                   })}
                 </select>
-              </div>
-              <div className="col-md-3 col-lg-2">
-                <select
-                  className="form-select form-select-sm"
-                  value={statusFilter}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    setStatusFilter(val);
-                    setCurrentPage(1);
-                    fetchUsers(searchTerm, roleFilter, val);
-                  }}
-                >
-                  <option value="">All Status</option>
-                  <option value="ACTIVE">ACTIVE</option>
-                  <option value="INACTIVE">INACTIVE</option>
-                </select>
-              </div>
+              )}
+            </div>
+            <div className="col-md-3 col-lg-2">
+              <select
+                className="form-select form-select-sm"
+                value={statusFilter}
+                onChange={(e) => {
+                  setStatusFilter(e.target.value);
+                  setCurrentPage(1);
+                }}
+              >
+                <option value="">All Status</option>
+                <option value="ACTIVE">ACTIVE</option>
+                <option value="INACTIVE">INACTIVE</option>
+              </select>
             </div>
           </div>
-          <div className="table-responsive">
-            <table className="table mb-0 align-middle table-hover">
-              <thead className="table-light">
-                <tr>
-                  <th style={{ width: '60px' }} className="text-center">S.No</th>
-                  <th>Employee ID</th>
-                  <th>Full Name</th>
-                  <th style={{ width: '110px' }}>Gender</th>
-                  <th>Email</th>
-                  <th>Phone</th>
-                  <th>Assigned Role</th>
-                  <th>Assigned Stage</th>
-                  <th>Status</th>
-                  <th className="text-end pe-4">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {users.length === 0 ? (
+        </div>
+        {initialLoading ? (
+          <div className="p-3">
+            <SkeletonTable rows={6} columns={8} />
+          </div>
+        ) : (
+          <>
+            <div className="table-responsive">
+              <table className="table mb-0 align-middle table-hover">
+                <thead className="table-light">
                   <tr>
-                    <td colSpan="10" className="text-center py-5 text-muted">
-                      <i className="ti ti-users-minus fs-2 d-block mb-2 text-secondary opacity-50"></i>
-                      <span className="fw-semibold">Data not found</span>
-                    </td>
+                    <th style={{ width: '60px' }} className="text-center">S.No</th>
+                    <th>Employee ID</th>
+                    <th>Full Name</th>
+                    <th>Email</th>
+                    <th>Phone</th>
+                    <th>Assigned Role</th>
+                    <th>Assigned Stage</th>
+                    <th>Status</th>
+                    <th className="text-end pe-4">Actions</th>
                   </tr>
-                ) : (
-                  paginatedUsers.map((u, index) => (
-                    <tr key={u.id}>
-                      <td className="fw-semibold text-center text-secondary">
-                        {(currentPage - 1) * pageSize + index + 1}
-                      </td>
-                      <td className="fw-bold text-primary">{u.employee_id}</td>
-                      <td className="fw-semibold text-dark">{u.name}</td>
-                      <td>
-                        <span className={`badge px-2 py-1 ${u.gender === 'Female' ? 'bg-danger-subtle text-danger border border-danger-subtle' : 'bg-primary-subtle text-primary border border-primary-subtle'}`}>
-                          <i className={`ti ${u.gender === 'Female' ? 'ti-gender-female' : 'ti-gender-male'} me-1`}></i>
-                          {u.gender || 'Male'}
+                </thead>
+                <tbody>
+                  {displayedUsers.length === 0 ? (
+                    <tr>
+                      <td colSpan="9" className="text-center py-5 text-muted">
+                        <i className="ti ti-users-minus fs-2 d-block mb-2 text-secondary opacity-50"></i>
+                        <span className="fw-semibold">
+                          {isSupervisor ? 'No operator users found matching your filters.' : 'Data not found'}
                         </span>
-                      </td>
-                      <td className="text-muted">{u.email || '-'}</td>
-                      <td className="text-muted small">{u.phone || '-'}</td>
-                      <td>
-                        <span className={`badge border px-2 py-1 ${getRoleBadgeClass(u.role)}`}>
-                          {u.role === 'REPORT_VIEWER' ? 'Production Report User' : u.role}
-                        </span>
-                      </td>
-                      <td>
-                        {renderAssignedStageCell(u)}
-                      </td>
-                      <td>
-                        <span className={`badge px-2 py-1 ${u.status === 'INACTIVE'
-                          ? 'bg-secondary-subtle text-secondary border'
-                          : 'bg-success-subtle text-success border border-success'
-                          }`}>
-                          <i className={`ti ${u.status === 'INACTIVE' ? 'ti-circle-x' : 'ti-circle-check'} me-1`}></i>
-                          {u.status || 'ACTIVE'}
-                        </span>
-                      </td>
-                      <td className="text-end pe-4">
-                        <div className="d-flex align-items-center justify-content-end gap-1">
-                          <button
-                            onClick={() => handleOpenView(u)}
-                            className="btn btn-sm border-0 p-1.5 rounded transition-all btn-view-hover text-info"
-                            title="View Full User Details"
-                            style={{ cursor: 'pointer' }}
-                          >
-                            <i className="ti ti-eye fs-5"></i>
-                          </button>
-                          <button
-                            onClick={() => handleOpenEdit(u)}
-                            className="btn btn-sm border-0 p-1.5 rounded transition-all btn-edit-hover text-warning-emphasis"
-                            title="Edit User"
-                            style={{ cursor: 'pointer' }}
-                          >
-                            <i className="ti ti-edit fs-5"></i>
-                          </button>
-                          <button
-                            onClick={() => handleDelete(u.id, u.employee_id)}
-                            className="btn btn-sm border-0 p-1.5 rounded transition-all btn-delete-hover text-danger"
-                            title="Delete User"
-                            style={{ cursor: 'pointer' }}
-                          >
-                            <i className="ti ti-trash fs-5"></i>
-                          </button>
-                        </div>
                       </td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+                  ) : (
+                    paginatedUsers.map((u, index) => (
+                      <tr key={u.id}>
+                        <td className="fw-semibold text-center text-secondary">
+                          {(currentPage - 1) * pageSize + index + 1}
+                        </td>
+                        <td className="fw-bold text-primary">{u.employee_id}</td>
+                        <td className="fw-semibold text-dark">{u.name}</td>
+                        <td className="text-muted">{u.email || '-'}</td>
+                        <td className="text-muted small">{u.phone || '-'}</td>
+                        <td>
+                          <span className={`badge border px-2 py-1 ${getRoleBadgeClass(u.role)}`}>
+                            {u.role === 'REPORT_VIEWER' ? 'Production Report User' : u.role}
+                          </span>
+                        </td>
+                        <td>
+                          {renderAssignedStageCell(u)}
+                        </td>
+                        <td>
+                          <span className={`badge px-2 py-1 ${u.status === 'INACTIVE'
+                            ? 'bg-secondary-subtle text-secondary border'
+                            : 'bg-success-subtle text-success border border-success'
+                            }`}>
+                            <i className={`ti ${u.status === 'INACTIVE' ? 'ti-circle-x' : 'ti-circle-check'} me-1`}></i>
+                            {u.status || 'ACTIVE'}
+                          </span>
+                        </td>
+                        <td className="text-end pe-4">
+                          <div className="d-flex align-items-center justify-content-end gap-1">
+                            <button
+                              onClick={() => handleOpenView(u)}
+                              className="btn btn-sm border-0 p-1.5 rounded transition-all btn-view-hover text-info"
+                              title="View Full User Details"
+                              style={{ cursor: 'pointer' }}
+                            >
+                              <i className="ti ti-eye fs-5"></i>
+                            </button>
+                            {isSupervisor ? (
+                              <button
+                                onClick={() => handleOpenReassign(u)}
+                                className="btn btn-sm border-0 p-1.5 rounded transition-all btn-edit-hover text-primary"
+                                title="Assign / Re-assign Stages"
+                                style={{ cursor: 'pointer' }}
+                              >
+                                <i className="ti ti-refresh fs-5"></i>
+                              </button>
+                            ) : (
+                              <>
+                                <button
+                                  onClick={() => handleOpenEdit(u)}
+                                  className="btn btn-sm border-0 p-1.5 rounded transition-all btn-edit-hover text-warning-emphasis"
+                                  title="Edit User"
+                                  style={{ cursor: 'pointer' }}
+                                >
+                                  <i className="ti ti-edit fs-5"></i>
+                                </button>
+                                <button
+                                  onClick={() => handleDelete(u.id, u.employee_id)}
+                                  className="btn btn-sm border-0 p-1.5 rounded transition-all btn-delete-hover text-danger"
+                                  title="Delete User"
+                                  style={{ cursor: 'pointer' }}
+                                >
+                                  <i className="ti ti-trash fs-5"></i>
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
 
-          <Pagination
-            currentPage={currentPage}
-            totalItems={users.length}
-            pageSize={pageSize}
-            onPageChange={setCurrentPage}
-            onPageSizeChange={(newSize) => {
-              setPageSize(newSize);
-              setCurrentPage(1);
-            }}
-          />
-        </div>
-      )}
+            <Pagination
+              currentPage={currentPage}
+              totalItems={displayedUsers.length}
+              pageSize={pageSize}
+              onPageChange={setCurrentPage}
+              onPageSizeChange={(newSize) => {
+                setPageSize(newSize);
+                setCurrentPage(1);
+              }}
+            />
+          </>
+        )}
+      </div>
 
       {/* Create User Modal */}
       <Modal isOpen={isCreateOpen} onClose={() => setIsCreateOpen(false)} title="Create System User Account">
@@ -1071,12 +1187,29 @@ export default function UserList() {
       </Modal>
 
       {/* Re-assign Stages Modal */}
-      <Modal isOpen={isReassignOpen} onClose={() => setIsReassignOpen(false)} title={`Re-assign Stages: ${reassignUser?.name} (${reassignUser?.employee_id})`}>
+      <Modal
+        isOpen={isReassignOpen}
+        onClose={() => setIsReassignOpen(false)}
+        title={`${isSupervisor ? 'Assign Operator Stages' : 'Re-assign Stages'}: ${reassignUser?.name} (${reassignUser?.employee_id})`}
+      >
         <form onSubmit={handleSaveReassign}>
-          <div className="alert alert-info py-2 px-3 small mb-3 d-flex align-items-center">
-            <i className="ti ti-info-circle fs-5 me-2"></i>
-            <div>
-              Re-assigning production stages for user <strong className="text-dark">{reassignUser?.name}</strong> ({reassignUser?.employee_id}). Tick or untick stages below.
+          <div className={`alert ${isSupervisor ? 'alert-primary bg-primary-subtle border-primary-subtle' : 'alert-info'} py-2 px-3 small mb-3`}>
+            <div className="d-flex align-items-center mb-1">
+              <i className={`ti ${isSupervisor ? 'ti-shield-check text-primary' : 'ti-info-circle'} fs-5 me-2`}></i>
+              <strong className="text-dark">
+                {isSupervisor ? 'Supervisor Authorized Stages Scope' : 'Re-assign Stages'}
+              </strong>
+            </div>
+            <div className="text-secondary">
+              {isSupervisor ? (
+                <>
+                  Assign production stages within your supervisor scope to operator <strong className="text-dark">{reassignUser?.name}</strong> ({reassignUser?.employee_id}). Tick the stages below and click <strong>Assign Stages</strong>.
+                </>
+              ) : (
+                <>
+                  Re-assigning production stages for user <strong className="text-dark">{reassignUser?.name}</strong> ({reassignUser?.employee_id}). Tick or untick stages below.
+                </>
+              )}
             </div>
           </div>
 
@@ -1085,7 +1218,7 @@ export default function UserList() {
           <div className="d-flex justify-content-end gap-2 pt-2 border-top mt-3">
             <button className="btn btn-light" type="button" onClick={() => setIsReassignOpen(false)}>Cancel</button>
             <button className="btn btn-primary" type="submit" disabled={submitting || !isReassignChanged}>
-              <i className="ti ti-check me-1"></i>{submitting ? 'Saving...' : 'Save Stage Re-assignment'}
+              <i className="ti ti-check me-1"></i>{submitting ? 'Saving...' : (isSupervisor ? 'Assign Stages' : 'Save Stage Re-assignment')}
             </button>
           </div>
         </form>
@@ -1157,10 +1290,10 @@ export default function UserList() {
                       <span className="text-dark font-mono fs-6 fw-semibold">
                         {showViewPassword
                           ? (
-                              (viewUser.password && !viewUser.password.startsWith('$2a$') && !viewUser.password.startsWith('$2b$') ? viewUser.password : null) ||
-                              (viewUser.raw_password && !viewUser.raw_password.startsWith('$2a$') && !viewUser.raw_password.startsWith('$2b$') ? viewUser.raw_password : null) ||
-                              'Admin@2324'
-                            )
+                            (viewUser.password && !viewUser.password.startsWith('$2a$') && !viewUser.password.startsWith('$2b$') ? viewUser.password : null) ||
+                            (viewUser.raw_password && !viewUser.raw_password.startsWith('$2a$') && !viewUser.raw_password.startsWith('$2b$') ? viewUser.raw_password : null) ||
+                            'Admin@2324'
+                          )
                           : '••••••••'}
                       </span>
                       <button

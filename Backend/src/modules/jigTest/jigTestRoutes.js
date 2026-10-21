@@ -55,6 +55,9 @@ router.get('/records', optionalAuth, JigTestController.getRecords);
 // Duplicate IMEI Check
 router.post('/check-duplicates', JigTestController.checkDuplicates);
 
+// Laser / Thermal Printer Payload Dispatch
+router.post('/print', optionalAuth, JigTestController.printPayload);
+
 // Reset State
 router.post('/reset', JigTestController.reset);
 

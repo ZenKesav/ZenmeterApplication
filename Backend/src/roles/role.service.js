@@ -15,8 +15,8 @@ class RoleService {
     return await RoleRepository.findByName(decoded);
   }
 
-  static async getRoles() {
-    const roles = await RoleRepository.findAll();
+  static async getRoles(filters = {}) {
+    const roles = await RoleRepository.findAll(filters);
     const rolePerms = await query.all(`SELECT role_name, permission_code FROM role_permissions`);
 
     return roles.map(r => {

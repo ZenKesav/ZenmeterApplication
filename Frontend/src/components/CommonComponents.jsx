@@ -73,7 +73,7 @@ export function LoadingSpinner({ text = 'Loading data...' }) {
 
 export function SkeletonTable({ rows = 5, columns = 5 }) {
   return (
-    <div className="card shadow-sm border-0">
+    <div className="card shadow-sm border">
       <div className="table-responsive">
         <table className="table mb-0 align-middle">
           <thead className="table-light">

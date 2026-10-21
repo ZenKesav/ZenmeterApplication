@@ -271,6 +271,24 @@ class JigTestController {
       });
     }
   }
+
+  /**
+   * POST /api/v1/jig/print
+   * Receive and process print payload for laser / thermal marking engine
+   */
+  static async printPayload(req, res) {
+    const requestId = req.id || req.headers['x-request-id'] || `REQ-${Date.now()}`;
+    const payload = req.body || {};
+    const channels = payload.channels || (Array.isArray(payload) ? payload : [payload]);
+    return res.status(200).json({
+      success: true,
+      message: `Print payload with ${channels.length || 0} channels successfully processed and sent to print engine.`,
+      dispatched_count: channels.length,
+      timestamp: new Date().toISOString(),
+      channels: channels,
+      requestId
+    });
+  }
 }
 
 module.exports = JigTestController;

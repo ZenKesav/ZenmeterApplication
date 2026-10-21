@@ -139,6 +139,26 @@ const Sidebar = () => {
           </li>
         )}
 
+        {/* SYSTEM & SUPERVISOR SECTION FOR SUPERVISORS */}
+        {isSupervisor && !isAdmin && (
+          <>
+            <li className="px-3 pt-3 pb-2">
+              <small className="nav-text text-uppercase text-muted fw-semibold">System & Supervisor</small>
+            </li>
+            <li>
+              <NavLink
+                to="/users"
+                className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
+                onClick={handleLinkClick}
+                title="User Management"
+              >
+                <i className="ti ti-users"></i>
+                <span className="nav-text">User Management</span>
+              </NavLink>
+            </li>
+          </>
+        )}
+
         {/* DYNAMIC STAGE CONSOLES ACCORDING TO LOGGED-IN USER ASSIGNED STAGES */}
         {visibleStageModules.length > 0 && !isReportViewer && !isAdmin && (
           <>
@@ -148,17 +168,36 @@ const Sidebar = () => {
               </small>
             </li>
             {visibleStageModules.map((stg) => (
-              <li key={stg.id}>
-                <NavLink
-                  to={`/stages/${stg.id}`}
-                  className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
-                  onClick={handleLinkClick}
-                  title={`${stg.badge || `${stg.id}-Stage`}: ${stg.name}`}
-                >
-                  <i className={`ti ${stg.icon || 'ti-tools'}`}></i>
-                  <span className="nav-text">{stg.shortName || stg.name}</span>
-                </NavLink>
-              </li>
+              <React.Fragment key={stg.id}>
+                <li>
+                  <NavLink
+                    to={`/stages/${stg.id}`}
+                    end
+                    className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
+                    onClick={handleLinkClick}
+                    title={`${stg.badge || `${stg.id}-Stage`}: ${stg.name}`}
+                  >
+                    <i className={`ti ${stg.icon || 'ti-tools'}`}></i>
+                    <span className="nav-text">{stg.shortName || stg.name}</span>
+                  </NavLink>
+                </li>
+                {Number(stg.id) === 4 && (
+                  <li>
+                    <NavLink
+                      to="/stages/4/demo"
+                      className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
+                      onClick={handleLinkClick}
+                      title="Demo Test (NIC Card Inside Print Simulation)"
+                    >
+                      <i className="ti ti-flask text-warning-emphasis"></i>
+                      <span className="nav-text">Demo Test</span>
+                      <span className="badge bg-warning-subtle text-warning border border-warning-subtle ms-auto font-mono" style={{ fontSize: '0.62rem', padding: '2px 5px' }}>
+                        DEMO
+                      </span>
+                    </NavLink>
+                  </li>
+                )}
+              </React.Fragment>
             ))}
           </>
         )}

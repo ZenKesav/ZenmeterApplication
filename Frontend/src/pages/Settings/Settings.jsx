@@ -51,13 +51,10 @@ export default function Settings() {
     <>
       <div className="row mb-4">
         <div className="col-12">
-          <h1 className="fs-3 mb-1 fw-bold text-dark d-flex align-items-center gap-2">
+          <h1 className="fs-3 mb-0 fw-bold text-dark d-flex align-items-center gap-2">
             <i className="ti ti-settings text-primary"></i>
             System Settings & Configuration
           </h1>
-          <p className="text-secondary mb-0">
-            Stage Specifications, Hardware Baud Rates & System Gateway Controls
-          </p>
         </div>
       </div>
 

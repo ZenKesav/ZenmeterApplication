@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { jigService, meterService, stageManagementService } from '../../services/apiServices';
 import StatusBadge from '../../components/StatusBadge/StatusBadge';
 import { Button, Input, Modal, SkeletonTable, Pagination } from '../../components/CommonComponents';
@@ -20,6 +20,7 @@ export default function ProductionOverview() {
 
   const [jigRecords, setJigRecords] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [stageFilter, setStageFilter] = useState(() => {
@@ -67,7 +68,10 @@ export default function ProductionOverview() {
     }
   }, [urlStage, isFullAccess]);
 
+  const latestJigReqRef = useRef(0);
+
   const fetchJigRecords = () => {
+    const reqId = ++latestJigReqRef.current;
     setLoading(true);
     const params = { search, status: statusFilter };
     if (stageFilter) {
@@ -77,18 +81,27 @@ export default function ProductionOverview() {
       params.operator_id = user.employee_id || user.user_name || user.id;
     }
     jigService.getJigRecords(params).then(res => {
-      const recordsData = Array.isArray(res) ? res : (res?.records || res?.data || []);
-      setJigRecords(recordsData);
-      setLoading(false);
+      if (reqId === latestJigReqRef.current) {
+        const recordsData = Array.isArray(res) ? res : (res?.records || res?.data || []);
+        setJigRecords(recordsData);
+        setLoading(false);
+        setInitialLoading(false);
+      }
     }).catch(err => {
-      console.error('Error fetching JIG records:', err);
-      setLoading(false);
+      if (reqId === latestJigReqRef.current) {
+        console.error('Error fetching JIG records:', err);
+        setLoading(false);
+        setInitialLoading(false);
+      }
     });
   };
 
   useEffect(() => {
-    fetchJigRecords();
-    setCurrentPage(1);
+    const timer = setTimeout(() => {
+      fetchJigRecords();
+      setCurrentPage(1);
+    }, 150);
+    return () => clearTimeout(timer);
   }, [search, statusFilter, stageFilter, user]);
 
   const handleRegisterMeter = async (e) => {
@@ -188,29 +201,30 @@ export default function ProductionOverview() {
       <div className="row mb-4">
         <div className="col-12 d-flex justify-content-between align-items-center flex-wrap gap-2">
           <div>
-            <h1 className="fs-3 mb-1 fw-bold text-dark d-flex align-items-center gap-2">
+            <h1 className="fs-3 mb-0 fw-bold text-dark d-flex align-items-center gap-2">
               <i className="ti ti-cpu text-primary"></i>
               {stageFilter
                 ? `Stage ${stageFilter} Production View`
                 : !isFullAccess && assignedStageNumbers.length > 0
-                  ? `Assigned Stages (${assignedStageNumbers.map(n => `Stage ${n}`).join(', ')}) Production View`
+                  ? 'Assigned Stages Production View'
                   : 'All Factory Production Stages'}
             </h1>
-            <p className="text-secondary mb-0">
-              Real-time Factory Production Database Telemetry & Channel Hardware Test Records
-            </p>
           </div>
         </div>
       </div>
 
       {/* Filter Bar with Stage Selector */}
-      <div className="card shadow-sm mb-4">
+      <div className="card shadow-sm border mb-4">
         <div className="card-body p-3 d-flex flex-wrap gap-3 align-items-center justify-content-between">
           <div className="d-flex align-items-center gap-2 flex-grow-1" style={{ maxWidth: '680px' }}>
             {/* Search Input */}
             <div className="input-group">
               <span className="input-group-text bg-white border-end-0">
-                <i className="ti ti-search text-muted"></i>
+                {loading && !initialLoading ? (
+                  <span className="spinner-border spinner-border-sm text-primary" style={{ width: '0.85rem', height: '0.85rem' }} role="status"></span>
+                ) : (
+                  <i className="ti ti-search text-muted"></i>
+                )}
               </span>
               <input
                 type="text"
@@ -255,7 +269,7 @@ export default function ProductionOverview() {
                 ) : (
                   <>
                     {assignedStages.length > 1 ? (
-                      <option value="">All Assigned Stages ({assignedStageNumbers.join(', ')})</option>
+                      <option value="">All Assigned Stages</option>
                     ) : assignedStages.length === 1 ? (
                       <option value={assignedStageNumbers[0]}>Stage {assignedStageNumbers[0]}: {assignedStages[0].name || assignedStages[0].stage_name}</option>
                     ) : (
@@ -310,10 +324,10 @@ export default function ProductionOverview() {
       </div>
 
       {/* JIG Records Table - Grouped by Cycle ID */}
-      {loading ? (
+      {initialLoading ? (
         <SkeletonTable rows={6} columns={8} />
       ) : (
-        <div className="card shadow-sm">
+        <div className="card shadow-sm border">
           <div className="table-responsive">
             <table className="table mb-0 align-middle table-hover text-nowrap">
               <thead className="table-light">

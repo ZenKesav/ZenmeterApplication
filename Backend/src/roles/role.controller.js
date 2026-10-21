@@ -3,7 +3,7 @@ const RoleService = require('./role.service');
 class RoleController {
   static async getRoles(req, res, next) {
     try {
-      const roles = await RoleService.getRoles();
+      const roles = await RoleService.getRoles(req.query);
       return res.status(200).json({ success: true, count: roles.length, roles, data: roles });
     } catch (err) {
       next(err);

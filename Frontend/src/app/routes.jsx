@@ -60,6 +60,9 @@ export default function AppRoutes() {
             <Route path="create-product" element={<StageAssignment />} />
             <Route path="assignments" element={<StageAssignment />} />
             <Route path="stages/execute" element={<StageExecution />} />
+            <Route path="stages/4/demo" element={<StageExecution isDemo={true} />} />
+            <Route path="stages/:stageId/demo" element={<StageExecution isDemo={true} />} />
+            <Route path="demo-test" element={<StageExecution isDemo={true} />} />
             <Route path="stages/:stageId" element={<StageExecution />} />
             <Route path="qc" element={<QCInspection />} />
             <Route path="reports" element={<Reports />} />

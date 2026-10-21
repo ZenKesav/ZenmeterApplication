@@ -231,7 +231,7 @@ export default function UserView() {
       </div>
 
       {/* 1st Box: User Account Details */}
-      <div className="card shadow-sm border-0 mb-4">
+      <div className="card shadow-sm border mb-4">
         <div className="card-header bg-white py-3 border-bottom d-flex align-items-center">
           <i className="ti ti-user fs-4 me-2 text-primary"></i>
           <h5 className="mb-0 fw-bold text-dark">User Account Details</h5>
@@ -329,7 +329,7 @@ export default function UserView() {
       </div>
 
       {/* 2nd Box: Assigned Production Stages */}
-      <div className="card shadow-sm border-0 mb-4">
+      <div className="card shadow-sm border mb-4">
         <div className="card-header bg-white py-3 border-bottom d-flex align-items-center justify-content-between">
           <div className="d-flex align-items-center">
             <i className="ti ti-building-factory-2 fs-4 me-2 text-primary"></i>
@@ -465,7 +465,7 @@ export default function UserView() {
       </div>
 
       {/* 3rd Box: User Daily Login & Logout Session History Card */}
-      <div className="card shadow-sm border-0 mb-4">
+      <div className="card shadow-sm border mb-4">
         <div className="card-header bg-white py-3 border-bottom d-flex align-items-center justify-content-between">
           <div className="d-flex align-items-center">
             <i className="ti ti-history fs-4 me-2 text-primary"></i>
